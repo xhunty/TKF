@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NLog.Extensions.Logging;
@@ -11,12 +12,18 @@ IHostBuilder builder = Host.CreateDefaultBuilder(args)
     })
     .ConfigureServices((context, services) =>
     {
-        services.AddHostedService<TkfService>();
+        services.AddHostedService<StreamService>();
         services.AddInvestApiClient((_, settings) => context.Configuration.Bind(settings));
+        services.AddDbContextFactory<AppContext>(options =>
+        {
+            options.UseNpgsql(context.Configuration.GetConnectionString("db"));
+        });
+
     }).ConfigureLogging((context, builder) =>
     {
         builder.AddNLog();
     });
+
 
 IHost host = builder.Build();
 host.Run();
