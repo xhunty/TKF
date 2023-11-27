@@ -73,49 +73,77 @@ namespace TkfClient
 
             await foreach(var response in stream.ResponseStream.ReadAllAsync(cancellationToken)) 
             {
-                if(response != null && response.Candle != null)
+                if (response != null)
                 {
-                    var candle = response.Candle;
-                    var share = monitoringShares.FirstOrDefault(s => s.Uid == candle.InstrumentUid);
-
-                    using (AppContext context = this.dbContextFactory.CreateDbContext())
+                    // Получили свечи
+                    if (response.Candle != null)
                     {
-                        var candleDb = await context.Candles.FirstOrDefaultAsync(c => c.Uid == share.Uid && c.Time == candle.Time.ToDateTime(), cancellationToken);
+                        var candle = response.Candle;
+                        var share = monitoringShares.FirstOrDefault(s => s.Uid == candle.InstrumentUid);
 
-                        if (candleDb != null)
+                        if (share == null)
                         {
-                            candleDb.Open = (decimal)candle.Open;
-                            candleDb.Close = (decimal)candle.Close;
-                            candleDb.Low = (decimal)candle.Low;
-                            candleDb.Volume = candle.Volume;
-                            candleDb.High = (decimal)candle.High;
-                        } 
-                        else
+                            logger.LogWarning($"Не удалось найти инструмент {candle.InstrumentUid} в списке на синхронизацию");
+                            continue;
+                        }
+                        try
                         {
-                            context.Candles.Add(new CandleSync
-                            {
-                                Uid = share.Uid,
-                                Open = (decimal)candle.Open,
-                                Close = (decimal)candle.Close,
-                                Low = (decimal)candle.Low,
-                                High = (decimal)candle.High,
-                                Volume = candle.Volume,
-                                Time = candle.Time.ToDateTime(),
-                                Isin = share.Isin
-                            });
+                            await WriteCandle(candle, share, cancellationToken);
+                        }
+                        catch (DbUpdateException ex)
+                        {
+                            logger.LogError(ex, ex.Message);
+                            continue;
                         }
 
-                        await context.SaveChangesAsync(cancellationToken);
-                    }
+                        var msg = $"{candle.Time.ToDateTime()} {share.Isin} {share.Name} O: {(decimal)candle.Open} L: {(decimal)candle.Low} H: {(decimal)candle.High} C: {(decimal)candle.Close} V: {candle.Volume}";
 
-                    var msg = $"{candle.Time.ToDateTime()} {share.Isin} {share.Name} O: {(decimal)candle.Open} L: {(decimal)candle.Low} H: {(decimal)candle.High} C: {(decimal)candle.Close} V: {candle.Volume}";
-                    Console.WriteLine(msg);
-                } 
+                        logger.LogInformation(msg);
+                    }
+                    else
+                    {
+                        logger.LogWarning("Empty response candle");
+                    }
+                }
                 else
                 {
-                    Console.WriteLine("Empty Response");
+                    logger.LogError("Empty response");
                 }
+                
             }
+        }
+
+        private async Task WriteCandle(Candle candle, Share share, CancellationToken cancellationToken)
+        {
+            using (AppContext context = this.dbContextFactory.CreateDbContext())
+            {
+                var candleDb = await context.Candles.FirstOrDefaultAsync(c => c.Uid == share.Uid && c.Time == candle.Time.ToDateTime(), cancellationToken);
+
+                if (candleDb != null)
+                {
+                    candleDb.Open = (decimal)candle.Open;
+                    candleDb.Close = (decimal)candle.Close;
+                    candleDb.Low = (decimal)candle.Low;
+                    candleDb.Volume = candle.Volume;
+                    candleDb.High = (decimal)candle.High;
+                }
+                else
+                {
+                    context.Candles.Add(new CandleSync
+                    {
+                        Uid = share.Uid,
+                        Open = (decimal)candle.Open,
+                        Close = (decimal)candle.Close,
+                        Low = (decimal)candle.Low,
+                        High = (decimal)candle.High,
+                        Volume = candle.Volume,
+                        Time = candle.Time.ToDateTime(),
+                        Isin = share.Isin
+                    });
+                }
+
+                await context.SaveChangesAsync(cancellationToken);
+            }            
         }
     }
 }
