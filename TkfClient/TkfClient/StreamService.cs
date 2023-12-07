@@ -18,6 +18,7 @@ namespace TkfClient
         private readonly ILogger<TkfService> logger;
         private readonly InvestApiClient investApiClient;
         private readonly IDbContextFactory<AppContext> dbContextFactory;
+        private int retryCount = 0;
 
         public StreamService(ILogger<TkfService> logger, InvestApiClient investApiClient, IDbContextFactory<AppContext> dbContextFactory) 
         {
@@ -28,21 +29,6 @@ namespace TkfClient
 
         protected override async Task ExecuteAsync(CancellationToken cancellationToken)
         {
-            try
-            {
-                var accounts = await investApiClient.Users.GetAccountsAsync(cancellationToken);
-
-                if (accounts == null || accounts.Accounts.Count == 0)
-                {
-                    throw new Exception("empty accounts");
-                }
-            }
-            catch (Exception ex)
-            {
-                this.logger.LogError(ex, ex.Message);
-                Environment.Exit(1);
-            }
-
             var allShares = await investApiClient.Instruments.SharesAsync(cancellationToken);
             var monitoringShares = allShares.Instruments.Where(s => s.Currency == "rub");
 
@@ -67,50 +53,65 @@ namespace TkfClient
                 SubscribeCandlesRequest = scr
             };
 
-            var stream = this.investApiClient.MarketDataStream.MarketDataStream();
-
-            await stream.RequestStream.WriteAsync(request, cancellationToken);
-
-            await foreach(var response in stream.ResponseStream.ReadAllAsync(cancellationToken)) 
+            while (!cancellationToken.IsCancellationRequested)
             {
-                if (response != null)
+                logger.LogInformation($"Restart Stream count: ${retryCount}");
+                // Создаем стрим
+                var stream = this.investApiClient.MarketDataStream.MarketDataStream();
+                try
                 {
-                    // Получили свечи
-                    if (response.Candle != null)
+                    await stream.RequestStream.WriteAsync(request, cancellationToken);
+
+                    // Читаем ответы
+                    await foreach (var response in stream.ResponseStream.ReadAllAsync(cancellationToken))
                     {
-                        var candle = response.Candle;
-                        var share = monitoringShares.FirstOrDefault(s => s.Uid == candle.InstrumentUid);
-
-                        if (share == null)
+                        if (response != null)
                         {
-                            logger.LogWarning($"Не удалось найти инструмент {candle.InstrumentUid} в списке на синхронизацию");
-                            continue;
-                        }
-                        try
-                        {
-                            await WriteCandle(candle, share, cancellationToken);
-                        }
-                        catch (DbUpdateException ex)
-                        {
-                            logger.LogError(ex, ex.Message);
-                            continue;
-                        }
+                            // Получили свечи
+                            if (response.Candle != null)
+                            {
+                                var candle = response.Candle;
+                                var share = monitoringShares.FirstOrDefault(s => s.Uid == candle.InstrumentUid);
 
-                        var msg = $"{candle.Time.ToDateTime()} {share.Isin} {share.Name} O: {(decimal)candle.Open} L: {(decimal)candle.Low} H: {(decimal)candle.High} C: {(decimal)candle.Close} V: {candle.Volume}";
+                                if (share == null)
+                                {
+                                    logger.LogWarning($"Не удалось найти инструмент {candle.InstrumentUid} в списке на синхронизацию");
+                                    continue;
+                                }
+                                try
+                                {
+                                    await WriteCandle(candle, share, cancellationToken);
+                                }
+                                catch (DbUpdateException ex)
+                                {
+                                    logger.LogError(ex, ex.Message);
+                                    continue;
+                                }
 
-                        logger.LogInformation(msg);
-                    }
-                    else
-                    {
-                        logger.LogWarning("Empty response candle");
+                                var msg = $"{candle.Time.ToDateTime()} {share.Isin} {share.Name} O: {(decimal)candle.Open} L: {(decimal)candle.Low} H: {(decimal)candle.High} C: {(decimal)candle.Close} V: {candle.Volume}";
+
+                                logger.LogInformation(msg);
+                            }
+                            else
+                            {
+                                logger.LogWarning("Empty response candle");
+                            }
+                        }
+                        else
+                        {
+                            logger.LogError("Empty response");
+                        }
                     }
                 }
-                else
+                catch (Exception ex)
                 {
-                    logger.LogError("Empty response");
+                    logger.LogError(ex, ex.Message);
                 }
-                
-            }
+
+                // Задержка перед последущим запуском в 10с.
+                await Task.Delay(10000, cancellationToken);
+                retryCount++;
+            }                        
         }
 
         private async Task WriteCandle(Candle candle, Share share, CancellationToken cancellationToken)
