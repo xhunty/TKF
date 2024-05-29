@@ -1,18 +1,17 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace TkfClient.Models
 {
     [Table("Candle")]
-    internal class CandleSync
+    public class CandleSync
     {
         [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public string Id { get; set; }
 
         public string Uid { get; set; }
-
-        public string Isin { get; set; }
 
         public DateTime Time { get; set; }
 

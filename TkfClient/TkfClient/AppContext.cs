@@ -3,11 +3,13 @@ using TkfClient.Models;
 
 namespace TkfClient
 {
-    internal class AppContext : DbContext
+    public class AppContext : DbContext
     {
         public AppContext(DbContextOptions<AppContext> dbContextOptions) 
             : base(dbContextOptions)
         { }
         public DbSet<CandleSync> Candles { get ; set; }
+
+        public DbSet<Share> Shares { get ; set; }
     }
 }

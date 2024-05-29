@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TkfClient;
@@ -11,9 +12,11 @@ using TkfClient;
 namespace TkfClient.Migrations
 {
     [DbContext(typeof(AppContext))]
-    partial class AppContextModelSnapshot : ModelSnapshot
+    [Migration("20240418061447_Remove_ISIN")]
+    partial class Remove_ISIN
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -52,34 +55,6 @@ namespace TkfClient.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Candle");
-                });
-
-            modelBuilder.Entity("TkfClient.Models.Share", b =>
-                {
-                    b.Property<string>("Uid")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Currency")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Isin")
-                        .HasColumnType("text");
-
-                    b.Property<int>("ListSection")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Lot")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Name")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Ticker")
-                        .HasColumnType("text");
-
-                    b.HasKey("Uid");
-
-                    b.ToTable("Share");
                 });
 #pragma warning restore 612, 618
         }

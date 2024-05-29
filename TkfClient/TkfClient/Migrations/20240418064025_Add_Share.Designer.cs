@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TkfClient;
@@ -11,9 +12,11 @@ using TkfClient;
 namespace TkfClient.Migrations
 {
     [DbContext(typeof(AppContext))]
-    partial class AppContextModelSnapshot : ModelSnapshot
+    [Migration("20240418064025_Add_Share")]
+    partial class Add_Share
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -64,9 +67,6 @@ namespace TkfClient.Migrations
 
                     b.Property<string>("Isin")
                         .HasColumnType("text");
-
-                    b.Property<int>("ListSection")
-                        .HasColumnType("integer");
 
                     b.Property<int>("Lot")
                         .HasColumnType("integer");
